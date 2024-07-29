@@ -1,16 +1,20 @@
 import 'dart:convert' as dart_convert;
 
-import 'package:chopper/chopper.dart';
-import 'package:test/test.dart';
-import 'package:http/testing.dart';
+import 'package:chopper/src/base.dart';
+import 'package:chopper/src/converters.dart';
+import 'package:chopper/src/request.dart';
+import 'package:chopper/src/response.dart';
 import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
+import 'package:test/test.dart';
+
 import 'test_service.dart';
 
-const baseUrl = 'http://localhost:8000';
+final baseUrl = Uri.parse('http://localhost:8000');
 
 void main() {
   group('Converter', () {
-    final buildClient = (http.BaseClient client) => ChopperClient(
+    ChopperClient buildClient(http.BaseClient client) => ChopperClient(
           baseUrl: baseUrl,
           client: client,
           converter: TestConverter(),
@@ -33,7 +37,12 @@ void main() {
       final converter = TestConverter();
 
       final encoded = converter.convertRequest(
-        Request('GET', '/', baseUrl, body: _Converted<String>('foo')),
+        Request(
+          'GET',
+          Uri.parse('/'),
+          baseUrl,
+          body: _Converted<String>('foo'),
+        ),
       );
 
       expect(encoded.body is String, isTrue);
@@ -67,46 +76,77 @@ void main() {
   group('JsonConverter', () {
     final jsonConverter = JsonConverter();
 
-    test('decode String', () {
+    test('decode String', () async {
       final value = 'foo';
       final res = Response(http.Response('"$value"', 200), '"$value"');
-      final converted = jsonConverter.convertResponse<String, String>(res);
+      final converted =
+          await jsonConverter.convertResponse<String, String>(res);
 
-      expect(converted is Response<String>, isTrue);
       expect(converted.body, equals(value));
     });
 
-    test('decode List String', () {
+    test('decode List String', () async {
       final res = Response(
         http.Response('["foo","bar"]', 200),
         '["foo","bar"]',
       );
       final converted =
-          jsonConverter.convertResponse<List<String>, String>(res);
+          await jsonConverter.convertResponse<List<String>, String>(res);
 
-      expect(converted is Response<List<String>>, isTrue);
       expect(converted.body, equals(['foo', 'bar']));
     });
 
-    test('decode List int', () {
+    test('decode List int', () async {
       final res = Response(http.Response('[1,2]', 200), '[1,2]');
-      final converted = jsonConverter.convertResponse<List<int>, int>(res);
+      final converted =
+          await jsonConverter.convertResponse<List<int>, int>(res);
 
-      expect(converted is Response<List<int>>, isTrue);
       expect(converted.body, equals([1, 2]));
     });
 
-    test('decode Map', () {
+    test('decode Map', () async {
       final res = Response(
         http.Response('{"foo":"bar"}', 200),
         '{"foo":"bar"}',
       );
       final converted =
-          jsonConverter.convertResponse<Map<String, String>, String>(res);
+          await jsonConverter.convertResponse<Map<String, String>, String>(res);
 
-      expect(converted is Response<Map<String, String>>, isTrue);
       expect(converted.body, equals({'foo': 'bar'}));
     });
+
+    test('JsonConverter.isJson', () {
+      expect(JsonConverter.isJson('{"foo":"bar"}'), isTrue);
+      expect(JsonConverter.isJson('foo'), isFalse);
+      expect(JsonConverter.isJson(''), isFalse);
+      expect(JsonConverter.isJson(null), isFalse);
+      expect(JsonConverter.isJson(42), isFalse);
+      expect(JsonConverter.isJson([]), isFalse);
+      expect(JsonConverter.isJson([1, 2, 3]), isFalse);
+      expect(JsonConverter.isJson(['a', 'b', 'c']), isFalse);
+      expect(JsonConverter.isJson({}), isFalse);
+      expect(
+        JsonConverter.isJson({
+          'foo': 'bar',
+          'list': [1, 2, 3],
+        }),
+        isFalse,
+      );
+    });
+  });
+
+  test('respects content-type headers', () {
+    final jsonConverter = JsonConverter();
+    final testRequest = Request(
+      'POST',
+      Uri.parse('foo'),
+      Uri.parse('bar'),
+      headers: {'Content-Type': 'application/vnd.api+json'},
+    );
+
+    final result = jsonConverter.convertRequest(testRequest);
+
+    expect(result.headers['content-type'], 'application/vnd.api+json');
   });
 }
 
@@ -115,16 +155,16 @@ class TestConverter implements Converter {
   Response<T> convertResponse<T, V>(Response res) {
     if (res.body is String) {
       return res.copyWith<_Converted<String>>(
-          body: _Converted<String>(res.body)) as Response<T>;
+        body: _Converted<String>(res.body),
+      ) as Response<T>;
     }
+
     return res as Response<T>;
   }
 
   @override
-  Request convertRequest(Request req) {
-    if (req.body is _Converted) return req.copyWith(body: req.body.data);
-    return req;
-  }
+  Request convertRequest(Request req) =>
+      req.body is _Converted ? req.copyWith(body: req.body.data) : req;
 }
 
 class TestErrorConverter implements ErrorConverter {
@@ -132,8 +172,10 @@ class TestErrorConverter implements ErrorConverter {
   Response convertError<T, V>(Response res) {
     if (res.body is String) {
       final error = dart_convert.jsonDecode(res.body);
+
       return res.copyWith<_ConvertedError>(body: _ConvertedError(error));
     }
+
     return res;
   }
 }

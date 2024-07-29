@@ -1,21 +1,24 @@
 import 'dart:convert';
 
-import 'package:chopper/chopper.dart';
-import 'package:test/test.dart';
-import 'package:http/testing.dart';
+import 'package:chopper/src/base.dart';
+import 'package:chopper/src/converters.dart';
+import 'package:chopper/src/interceptors/headers_interceptor.dart';
 import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
+import 'package:test/test.dart';
 
-const baseUrl = 'http://localhost:8000';
+final baseUrl = Uri.parse('http://localhost:8000');
 
 void main() {
-  final buildClient = ([http.Client? httpClient]) => ChopperClient(
+  ChopperClient buildClient([http.Client? httpClient]) => ChopperClient(
         baseUrl: baseUrl,
         client: httpClient,
         interceptors: [
-          (Request req) => applyHeader(req, 'foo', 'bar'),
+          HeadersInterceptor({'foo': 'bar'}),
         ],
         converter: JsonConverter(),
       );
+
   group('Client methods', () {
     test('GET', () async {
       final httpClient = MockClient((request) async {
@@ -32,9 +35,11 @@ void main() {
 
       final chopper = buildClient(httpClient);
       final response = await chopper.get(
-        '/test/get',
+        Uri(
+          path: '/test/get',
+          queryParameters: {'key': 'val'},
+        ),
         headers: {'int': '42'},
-        parameters: {'key': 'val'},
       );
 
       expect(response.body, equals('get response'));
@@ -58,10 +63,12 @@ void main() {
 
       final chopper = buildClient(httpClient);
       final response = await chopper.post(
-        '/test/post',
+        Uri(
+          path: '/test/post',
+          queryParameters: {'key': 'val'},
+        ),
         headers: {'int': '42'},
         body: {'content': 'body'},
-        parameters: {'key': 'val'},
       );
 
       expect(response.body, equals('post response'));
@@ -86,10 +93,12 @@ void main() {
 
       final chopper = buildClient(httpClient);
       final response = await chopper.put(
-        '/test/put',
+        Uri(
+          path: '/test/put',
+          queryParameters: {'key': 'val'},
+        ),
         headers: {'int': '42'},
         body: {'content': 'body'},
-        parameters: {'key': 'val'},
       );
 
       expect(response.body, equals('put response'));
@@ -114,10 +123,12 @@ void main() {
 
       final chopper = buildClient(httpClient);
       final response = await chopper.patch(
-        '/test/patch',
+        Uri(
+          path: '/test/patch',
+          queryParameters: {'key': 'val'},
+        ),
         headers: {'int': '42'},
         body: {'content': 'body'},
-        parameters: {'key': 'val'},
       );
 
       expect(response.body, equals('patch response'));
@@ -141,9 +152,11 @@ void main() {
 
       final chopper = buildClient(httpClient);
       final response = await chopper.delete(
-        '/test/delete',
+        Uri(
+          path: '/test/delete',
+          queryParameters: {'key': 'val'},
+        ),
         headers: {'int': '42'},
-        parameters: {'key': 'val'},
       );
 
       expect(response.body, equals('delete response'));
@@ -166,9 +179,11 @@ void main() {
 
       final chopper = buildClient(httpClient);
       final response = await chopper.options(
-        '/test/get',
+        Uri(
+          path: '/test/get',
+          queryParameters: {'key': 'val'},
+        ),
         headers: {'int': '42'},
-        parameters: {'key': 'val'},
       );
 
       expect(response.body, equals('get response'));

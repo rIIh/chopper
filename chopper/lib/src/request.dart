@@ -1,60 +1,141 @@
-import 'dart:async';
-import 'dart:convert';
+import 'dart:async' show Stream;
 
-import 'package:meta/meta.dart';
+import 'package:chopper/src/extensions.dart';
+import 'package:chopper/src/utils.dart';
+import 'package:equatable/equatable.dart' show EquatableMixin;
 import 'package:http/http.dart' as http;
-import 'utils.dart';
-import 'constants.dart';
+import 'package:meta/meta.dart';
+import 'package:qs_dart/qs_dart.dart' show ListFormat;
 
+/// {@template request}
 /// This class represents an HTTP request that can be made with Chopper.
-@immutable
-class Request {
-  final String method;
-  final String baseUrl;
-  final String url;
+/// {@endtemplate}
+base class Request extends http.BaseRequest with EquatableMixin {
+  final Uri uri;
+  final Uri baseUri;
   final dynamic body;
-  final List<PartValue> parts;
   final Map<String, dynamic> parameters;
-  final Map<String, String> headers;
+  final Object? tag;
   final bool multipart;
+  final List<PartValue> parts;
+  final ListFormat? listFormat;
+  @Deprecated('Use listFormat instead')
+  final bool? useBrackets;
+  final bool? includeNullQueryVars;
 
-  const Request(
-    this.method,
-    this.url,
-    this.baseUrl, {
+  /// {@macro request}
+  Request(
+    String method,
+    this.uri,
+    this.baseUri, {
     this.body,
-    this.parameters = const {},
-    this.headers = const {},
+    Map<String, dynamic>? parameters,
+    Map<String, String> headers = const {},
     this.multipart = false,
     this.parts = const [],
-  });
+    this.tag,
+    this.listFormat,
+    @Deprecated('Use listFormat instead') this.useBrackets,
+    this.includeNullQueryVars,
+  })  : assert(
+            !baseUri.hasQuery,
+            'baseUri should not contain query parameters.'
+            'Use a request interceptor to add default query parameters'),
+        // Merge uri.queryParametersAll in the final parameters object so the request object reflects all configured queryParameters
+        parameters = {...uri.queryParametersAll, ...?parameters},
+        super(
+          method,
+          buildUri(
+            baseUri,
+            uri,
+            {...uri.queryParametersAll, ...?parameters},
+            listFormat: listFormat,
+            // ignore: deprecated_member_use_from_same_package
+            useBrackets: useBrackets,
+            includeNullQueryVars: includeNullQueryVars,
+          ),
+        ) {
+    this.headers.addAll(headers);
+  }
 
-  /// Makes a copy of this request, replacing original values with the given ones.
+  /// Makes a copy of this [Request], replacing original values with the given ones.
   Request copyWith({
-    HttpMethod? method,
-    String? url,
+    String? method,
+    Uri? uri,
+    Uri? baseUri,
     dynamic body,
     Map<String, dynamic>? parameters,
     Map<String, String>? headers,
-    Encoding? encoding,
-    List<PartValue>? parts,
     bool? multipart,
-    String? baseUrl,
+    List<PartValue>? parts,
+    ListFormat? listFormat,
+    @Deprecated('Use listFormat instead') bool? useBrackets,
+    bool? includeNullQueryVars,
+    Object? tag,
   }) =>
       Request(
-        (method ?? this.method) as String,
-        url ?? this.url,
-        baseUrl ?? this.baseUrl,
+        method ?? this.method,
+        uri ?? this.uri,
+        baseUri ?? this.baseUri,
         body: body ?? this.body,
         parameters: parameters ?? this.parameters,
         headers: headers ?? this.headers,
-        parts: parts ?? this.parts,
         multipart: multipart ?? this.multipart,
+        parts: parts ?? this.parts,
+        listFormat: listFormat ?? this.listFormat,
+        // ignore: deprecated_member_use_from_same_package
+        useBrackets: useBrackets ?? this.useBrackets,
+        includeNullQueryVars: includeNullQueryVars ?? this.includeNullQueryVars,
+        tag: tag ?? this.tag,
       );
 
-  Uri _buildUri() => buildUri(baseUrl, url, parameters);
+  /// Builds a valid URI from [baseUrl], [url] and [parameters].
+  ///
+  /// If [url] starts with 'http://' or 'https://', baseUrl is ignored.
+  @visibleForTesting
+  static Uri buildUri(
+    Uri baseUrl,
+    Uri url,
+    Map<String, dynamic> parameters, {
+    ListFormat? listFormat,
+    @Deprecated('Use listFormat instead') bool? useBrackets,
+    bool? includeNullQueryVars,
+  }) {
+    // If the request's url is already a fully qualified URL, we can use it
+    // as-is and ignore the baseUrl.
+    final Uri uri = url.isScheme('HTTP') || url.isScheme('HTTPS')
+        ? url
+        : _mergeUri(baseUrl, url);
 
-  Map<String, String> _buildHeaders() => Map<String, String>.from(headers);
+    // Check if parameter also has all the queryParameters from the url (not the merged uri)
+    final bool parametersContainsUriQuery = parameters.keys
+        .every((element) => url.queryParametersAll.keys.contains(element));
+    final Map<String, dynamic> allParameters = parametersContainsUriQuery
+        ? parameters
+        : {...url.queryParametersAll, ...parameters};
+
+    final String query = mapToQuery(
+      allParameters,
+      listFormat: listFormat,
+      // ignore: deprecated_member_use_from_same_package
+      useBrackets: useBrackets,
+      includeNullQueryVars: includeNullQueryVars,
+    );
+
+    return query.isNotEmpty ? uri.replace(query: query) : uri;
+  }
+
+  /// Merges Uri into another Uri preserving queries and paths
+  static Uri _mergeUri(Uri baseUri, Uri addToUri) {
+    final path = baseUri.hasEmptyPath
+        ? addToUri.path
+        : '${baseUri.path.rightStrip('/')}/${addToUri.path.leftStrip('/')}';
+
+    return baseUri.replace(
+      path: path,
+      query: addToUri.hasQuery ? addToUri.query : null,
+    );
+  }
 
   /// Converts this Chopper Request into a [http.BaseRequest].
   ///
@@ -65,38 +146,132 @@ class Request {
   ///   - [http.MultipartRequest] if [multipart] is true
   ///   - or a [http.Request]
   Future<http.BaseRequest> toBaseRequest() async {
-    final uri = _buildUri();
-    final heads = _buildHeaders();
+    if (body is Stream<List<int>>) return toStreamedRequest(body);
 
-    if (body is Stream<List<int>>) {
-      return toStreamedRequest(
-        body,
-        method,
-        uri,
-        heads,
-      );
-    }
+    if (multipart) return toMultipartRequest();
 
-    if (multipart) {
-      return toMultipartRequest(
-        parts,
-        method,
-        uri,
-        heads,
-      );
-    }
-    return toHttpRequest(
-      body,
-      method,
-      uri,
-      heads,
-    );
+    return toHttpRequest();
   }
+
+  /// Convert this [Request] to a [http.Request]
+  @visibleForTesting
+  http.Request toHttpRequest() {
+    final http.Request request = http.Request(method, url)
+      ..followRedirects = followRedirects;
+
+    if (body == null) {
+      request.headers.addAll(headers);
+    } else {
+      if (body is String) {
+        request
+          ..headers.addAll(headers)
+          ..body = body;
+      } else if (body is List<int>) {
+        request
+          ..bodyBytes = body
+          ..headers.addAll(headers);
+      } else if (body is Map<String, String>) {
+        request
+          ..headers.addAll(headers)
+          ..bodyFields = body;
+      } else {
+        throw ArgumentError.value('$body', 'body');
+      }
+    }
+
+    return request;
+  }
+
+  /// Convert this [Request] to a [http.MultipartRequest]
+  @visibleForTesting
+  Future<http.MultipartRequest> toMultipartRequest() async {
+    final http.MultipartRequest request = http.MultipartRequest(method, url)
+      ..headers.addAll(headers);
+
+    for (final PartValue part in parts) {
+      if (part.value == null) continue;
+
+      if (part.value is http.MultipartFile) {
+        request.files.add(part.value);
+      } else if (part.value is Iterable<http.MultipartFile>) {
+        request.files.addAll(part.value);
+      } else if (part is PartValueFile) {
+        if (part.value is List<int>) {
+          request.files.add(
+            http.MultipartFile.fromBytes(part.name, part.value),
+          );
+        } else if (part.value is String) {
+          request.files.add(
+            await http.MultipartFile.fromPath(part.name, part.value),
+          );
+        } else {
+          throw ArgumentError(
+            'Type ${part.value.runtimeType} is not a supported type for PartFile. '
+            'Please use one of the following types:\n'
+            '- List<int>\n'
+            '- String (path of your file)\n'
+            '- MultipartFile (from package:http)',
+          );
+        }
+      } else if (part.value is Iterable) {
+        request.fields.addAll({
+          for (int i = 0; i < part.value.length; i++)
+            '${part.name}[$i]': part.value.elementAt(i).toString(),
+        });
+      } else {
+        request.fields[part.name] = part.value.toString();
+      }
+    }
+
+    return request;
+  }
+
+  /// Convert this [Request] to a [http.StreamedRequest]
+  @visibleForTesting
+  http.StreamedRequest toStreamedRequest(Stream<List<int>> bodyStream) {
+    final http.StreamedRequest request = http.StreamedRequest(method, url)
+      ..headers.addAll(headers);
+
+    bodyStream.listen(
+      request.sink.add,
+      onDone: request.sink.close,
+      onError: request.sink.addError,
+    );
+
+    return request;
+  }
+
+  @override
+  List<Object?> get props => [
+        method,
+        uri,
+        baseUri,
+        body,
+        parameters,
+        headers,
+        multipart,
+        parts,
+        listFormat,
+        // ignore: deprecated_member_use_from_same_package
+        useBrackets,
+        includeNullQueryVars,
+      ];
 }
+
+///
+/// [Request] mixin for the purposes of creating mocks
+/// using a mocking framework such as Mockito or Mocktail.
+///
+/// ```dart
+/// base class MockRequest extends Mock with MockRequestMixin {}
+/// ```
+///
+@visibleForTesting
+base mixin MockRequestMixin implements Request {}
 
 /// Represents a part in a multipart request.
 @immutable
-class PartValue<T> {
+final class PartValue<T> with EquatableMixin {
   final T value;
   final String name;
 
@@ -112,119 +287,38 @@ class PartValue<T> {
         name ?? this.name,
         value ?? this.value as NewType,
       );
+
+  @override
+  List<Object?> get props => [
+        name,
+        value,
+      ];
 }
 
-/// Represents a file part in a multipart request.
-@immutable
-class PartValueFile<T> extends PartValue<T> {
-  PartValueFile(String name, T value) : super(name, value);
-}
-
-/// Builds a valid URI from [baseUrl], [url] and [parameters].
 ///
-/// If [url] starts with 'http://' or 'https://', baseUrl is ignored.
-Uri buildUri(String baseUrl, String url, Map<String, dynamic> parameters) {
-  var uri;
-  if (url.startsWith('http://') || url.startsWith('https://')) {
-    // If the request's url is already a fully qualified URL, we can use it
-    // as-is and ignore the baseUrl.
-    uri = Uri.parse(url);
-  } else {
-    if (!baseUrl.endsWith('/') && !url.startsWith('/')) {
-      uri = Uri.parse('$baseUrl/$url');
-    } else {
-      uri = Uri.parse('$baseUrl$url');
-    }
-  }
-
-  var query = mapToQuery(parameters);
-  if (query.isNotEmpty) {
-    if (uri.hasQuery) {
-      query += '&${uri.query}';
-    }
-    return uri.replace(query: query);
-  }
-  return uri;
-}
-
+/// [PartValue] mixin for the purposes of creating mocks
+/// using a mocking framework such as Mockito or Mocktail.
+///
+/// ```dart
+/// base class MockPartValue<T> extends Mock with MockPartValueMixin<T> {}
+/// ```
+///
 @visibleForTesting
-Future<http.Request> toHttpRequest(
-  body,
-  String method,
-  Uri uri,
-  Map<String, String> headers,
-) async {
-  final baseRequest = http.Request(method, uri);
-  baseRequest.headers.addAll(headers);
+base mixin MockPartValueMixin<T> implements PartValue<T> {}
 
-  if (body != null) {
-    if (body is String) {
-      baseRequest.body = body;
-    } else if (body is List<int>) {
-      baseRequest.bodyBytes = body;
-    } else if (body is Map<String, String>) {
-      baseRequest.bodyFields = body;
-    } else {
-      throw ArgumentError.value('$body', 'body');
-    }
-  }
-  return baseRequest;
+/// Represents a file [PartValue] in a multipart request.
+@immutable
+final class PartValueFile<T> extends PartValue<T> {
+  const PartValueFile(super.name, super.value);
 }
 
+///
+/// [PartValueFile] mixin for the purposes of creating mocks
+/// using a mocking framework such as Mockito or Mocktail.
+///
+/// ```dart
+/// base class MockPartValueFile<T> extends Mock with MockPartValueFileMixin<T> {}
+/// ```
+///
 @visibleForTesting
-Future<http.MultipartRequest> toMultipartRequest(
-  List<PartValue> parts,
-  String method,
-  Uri uri,
-  Map<String, String> headers,
-) async {
-  final baseRequest = http.MultipartRequest(method, uri);
-  baseRequest.headers.addAll(headers);
-
-  for (final part in parts) {
-    if (part.value == null) continue;
-
-    if (part.value is http.MultipartFile) {
-      baseRequest.files.add(part.value);
-    } else if (part.value is Iterable<http.MultipartFile>) {
-      baseRequest.files.addAll(part.value);
-    } else if (part is PartValueFile) {
-      if (part.value is List<int>) {
-        baseRequest.files.add(
-          http.MultipartFile.fromBytes(part.name, part.value),
-        );
-      } else if (part.value is String) {
-        baseRequest.files.add(
-          await http.MultipartFile.fromPath(part.name, part.value),
-        );
-      } else {
-        throw ArgumentError(
-          'Type ${part.value.runtimeType} is not a supported type for PartFile'
-          'Please use one of the following types'
-          ' - List<int>'
-          ' - String (path of your file) '
-          ' - MultipartFile (from package:http)',
-        );
-      }
-    } else {
-      baseRequest.fields[part.name] = part.value.toString();
-    }
-  }
-  return baseRequest;
-}
-
-@visibleForTesting
-Future<http.StreamedRequest> toStreamedRequest(
-  Stream<List<int>> bodyStream,
-  String method,
-  Uri uri,
-  Map<String, String> headers,
-) async {
-  final req = http.StreamedRequest(method, uri);
-  req.headers.addAll(headers);
-
-  bodyStream.listen(req.sink.add,
-      onDone: req.sink.close, onError: req.sink.addError);
-
-  return req;
-}
+base mixin MockPartValueFileMixin<T> implements PartValueFile<T> {}

@@ -1,0 +1,22 @@
+version: 2
+updates:
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    target-branch: "develop"
+  - package-ecosystem: "pub"
+    directory: "/chopper"
+    schedule:
+      interval: "weekly"
+    target-branch: "develop"
+  - package-ecosystem: "pub"
+    directory: "/chopper_built_value"
+    schedule:
+      interval: "weekly"
+    target-branch: "develop"
+  - package-ecosystem: "pub"
+    directory: "/chopper_generator"
+    schedule:
+      interval: "weekly"
+    target-branch: "develop"

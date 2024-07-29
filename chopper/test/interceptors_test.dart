@@ -1,9 +1,16 @@
 import 'dart:async';
 
-import 'package:http/testing.dart';
+import 'package:chopper/src/base.dart';
+import 'package:chopper/src/chain/chain.dart';
+import 'package:chopper/src/interceptors/interceptor.dart';
+import 'package:chopper/src/request.dart';
+import 'package:chopper/src/response.dart';
+import 'package:chopper/src/utils.dart';
 import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
 import 'package:test/test.dart';
-import 'package:chopper/chopper.dart';
+
+import 'helpers/fake_chain.dart';
 import 'test_service.dart';
 
 void main() {
@@ -14,6 +21,7 @@ void main() {
           request.url.toString(),
           equals('/test/get/1234/intercept'),
         );
+
         return http.Response('', 200);
       },
     );
@@ -30,24 +38,6 @@ void main() {
     test('RequestInterceptor', () async {
       final chopper = ChopperClient(
         interceptors: [RequestIntercept()],
-        services: [
-          HttpTestService.create(),
-        ],
-        client: requestClient,
-      );
-
-      await chopper.getService<HttpTestService>().getTest(
-            '1234',
-            dynamicHeader: '',
-          );
-    });
-
-    test('RequestInterceptorFunc', () async {
-      final chopper = ChopperClient(
-        interceptors: [
-          (Request request) =>
-              request.copyWith(url: '${request.url}/intercept'),
-        ],
         services: [
           HttpTestService.create(),
         ],
@@ -77,92 +67,17 @@ void main() {
       expect(ResponseIntercept.intercepted, isA<_Intercepted>());
     });
 
-    test('ResponseInterceptorFunc', () async {
-      var intercepted;
-
-      final chopper = ChopperClient(
-        interceptors: [
-          (Response response) {
-            intercepted = _Intercepted(response.body);
-            return response;
-          },
-        ],
-        services: [
-          HttpTestService.create(),
-        ],
-        client: responseClient,
-      );
-
-      await chopper.getService<HttpTestService>().getTest(
-            '1234',
-            dynamicHeader: '',
-          );
-
-      expect(intercepted, isA<_Intercepted<dynamic>>());
-    });
-
-    test('TypedResponseInterceptorFunc1', () async {
-      var intercepted;
-
-      final chopper = ChopperClient(
-        interceptors: [
-          <BodyType>(Response<BodyType> response) {
-            intercepted = _Intercepted(response.body);
-            return response;
-          },
-        ],
-        services: [
-          HttpTestService.create(),
-        ],
-        client: responseClient,
-      );
-
-      await chopper.getService<HttpTestService>().getTest(
-            '1234',
-            dynamicHeader: '',
-          );
-
-      expect(intercepted, isA<_Intercepted<String?>>());
-    });
-
-    test('TypedResponseInterceptorFunc2', () async {
-      final client = MockClient((http.Request req) async {
-        return http.Response('["1","2"]', 200);
-      });
-
-      var intercepted;
-
-      final chopper = ChopperClient(
-        client: client,
-        converter: JsonConverter(),
-        interceptors: [
-          <BodyType, InnerType>(Response<BodyType> response) {
-            expect(isTypeOf<String, InnerType>(), isTrue);
-            expect(isTypeOf<BodyType, List<String>>(), isTrue);
-            intercepted = _Intercepted<BodyType>(response.body!);
-            return response;
-          },
-        ],
-        services: [
-          HttpTestService.create(),
-        ],
-      );
-
-      await chopper.getService<HttpTestService>().listString();
-
-      expect(intercepted, isA<_Intercepted<List<String>>>());
-    });
-
     test('headers', () async {
       final client = MockClient((http.Request req) async {
         expect(req.headers.containsKey('foo'), isTrue);
         expect(req.headers['foo'], equals('bar'));
+
         return http.Response('', 200);
       });
 
       final chopper = ChopperClient(
         interceptors: [
-          HeadersInterceptor({'foo': 'bar'})
+          HeadersInterceptor({'foo': 'bar'}),
         ],
         services: [
           HttpTestService.create(),
@@ -178,8 +93,8 @@ void main() {
 
     final fakeRequest = Request(
       'POST',
-      '/',
-      'base',
+      Uri.parse('/'),
+      Uri.parse('base'),
       body: 'test',
       headers: {'foo': 'bar'},
     );
@@ -188,7 +103,7 @@ void main() {
       final curl = CurlInterceptor();
       var log = '';
       chopperLogger.onRecord.listen((r) => log = r.message);
-      await curl.onRequest(fakeRequest);
+      await curl.intercept(FakeChain(fakeRequest));
 
       expect(
         log,
@@ -198,70 +113,62 @@ void main() {
       );
     });
 
-    test('Http logger interceptor request', () async {
-      final logger = HttpLoggingInterceptor();
-
-      final logs = [];
-      chopperLogger.onRecord.listen((r) => logs.add(r.message));
-      await logger.onRequest(fakeRequest);
-
-      expect(
-        logs,
-        equals(
-          [
-            '--> POST base/',
-            'foo: bar',
-            'content-type: text/plain; charset=utf-8',
-            'test',
-            '--> END POST (4-byte body)',
-          ],
+    final fakeRequestMultipart = Request(
+      'POST',
+      Uri.parse('/'),
+      Uri.parse('base'),
+      headers: {'foo': 'bar'},
+      parts: [
+        PartValue<int>('p1', 123),
+        PartValueFile<http.MultipartFile>(
+          'p2',
+          http.MultipartFile.fromBytes('file', [0], filename: 'filename'),
         ),
-      );
-    });
+      ],
+      multipart: true,
+    );
 
-    test('Http logger interceptor response', () async {
-      final logger = HttpLoggingInterceptor();
-
-      final fakeResponse = Response<String>(
-        http.Response('responseBodyBase', 200,
-            headers: {'foo': 'bar'},
-            request: await fakeRequest.toBaseRequest()),
-        'responseBody',
-      );
-
-      final logs = [];
-      chopperLogger.onRecord.listen((r) => logs.add(r.message));
-      await logger.onResponse(fakeResponse);
+    test('Curl interceptors Multipart', () async {
+      final curl = CurlInterceptor();
+      var log = '';
+      chopperLogger.onRecord.listen((r) => log = r.message);
+      await curl.intercept(FakeChain(fakeRequestMultipart));
 
       expect(
-        logs,
+        log,
         equals(
-          [
-            '<-- 200 base/',
-            'foo: bar',
-            'responseBodyBase',
-            '--> END POST (16-byte body)',
-          ],
+          "curl -v -X POST -H 'foo: bar' -f 'p1: 123' -f 'file: filename' \"base/\"",
         ),
       );
     });
   });
 }
 
-class ResponseIntercept implements ResponseInterceptor {
+class ResponseIntercept implements Interceptor {
   static dynamic intercepted;
 
   @override
-  FutureOr<Response> onResponse(Response response) {
+  FutureOr<Response<BodyType>> intercept<BodyType>(
+      Chain<BodyType> chain) async {
+    final response = await chain.proceed(chain.request);
+
     intercepted = _Intercepted(response.body);
+
     return response;
   }
 }
 
-class RequestIntercept implements RequestInterceptor {
+class RequestIntercept implements Interceptor {
   @override
-  FutureOr<Request> onRequest(Request request) =>
-      request.copyWith(url: '${request.url}/intercept');
+  FutureOr<Response<BodyType>> intercept<BodyType>(
+      Chain<BodyType> chain) async {
+    final request = chain.request;
+    return chain.proceed(
+      request.copyWith(
+        uri: request.uri.replace(path: '${request.uri}/intercept'),
+      ),
+    );
+  }
 }
 
 class _Intercepted<BodyType> {

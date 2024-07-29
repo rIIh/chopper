@@ -1,1 +1,12 @@
-include: package:pedantic/analysis_options.yaml
+include: package:lints/recommended.yaml
+
+analyzer:
+  exclude:
+    - "**.g.dart"
+    - "**.mocks.dart"
+    - "example/**"
+
+linter:
+  rules:
+    avoid_print: true
+    prefer_single_quotes: true

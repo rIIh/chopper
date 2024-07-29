@@ -1,13 +1,13 @@
-dart:
-- stable
+sdk:
+ - stable
 
 stages:
-- analyzer_and_format:
+- analyze_and_format:
   - group:
-    - dartfmt
-    - dartanalyzer: --fatal-infos .
+    - format
+    - analyze: --fatal-infos .
 - unit_test:
-  - test:
+  - test_with_coverage:
   - test: -p chrome
 
 cache:

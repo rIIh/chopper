@@ -1,6 +1,6 @@
 // GENERATED CODE - DO NOT MODIFY BY HAND
 
-part of resource;
+part of 'built_value_resource.dart';
 
 // **************************************************************************
 // BuiltValueGenerator
@@ -17,9 +17,9 @@ class _$ResourceSerializer implements StructuredSerializer<Resource> {
   final String wireName = 'Resource';
 
   @override
-  Iterable<Object> serialize(Serializers serializers, Resource object,
+  Iterable<Object?> serialize(Serializers serializers, Resource object,
       {FullType specifiedType = FullType.unspecified}) {
-    final result = <Object>[
+    final result = <Object?>[
       'id',
       serializers.serialize(object.id, specifiedType: const FullType(String)),
       'name',
@@ -30,23 +30,23 @@ class _$ResourceSerializer implements StructuredSerializer<Resource> {
   }
 
   @override
-  Resource deserialize(Serializers serializers, Iterable<Object> serialized,
+  Resource deserialize(Serializers serializers, Iterable<Object?> serialized,
       {FullType specifiedType = FullType.unspecified}) {
     final result = new ResourceBuilder();
 
     final iterator = serialized.iterator;
     while (iterator.moveNext()) {
-      final key = iterator.current as String;
+      final key = iterator.current! as String;
       iterator.moveNext();
-      final dynamic value = iterator.current;
+      final Object? value = iterator.current;
       switch (key) {
         case 'id':
           result.id = serializers.deserialize(value,
-              specifiedType: const FullType(String)) as String;
+              specifiedType: const FullType(String))! as String;
           break;
         case 'name':
           result.name = serializers.deserialize(value,
-              specifiedType: const FullType(String)) as String;
+              specifiedType: const FullType(String))! as String;
           break;
       }
     }
@@ -62,9 +62,9 @@ class _$ResourceErrorSerializer implements StructuredSerializer<ResourceError> {
   final String wireName = 'ResourceError';
 
   @override
-  Iterable<Object> serialize(Serializers serializers, ResourceError object,
+  Iterable<Object?> serialize(Serializers serializers, ResourceError object,
       {FullType specifiedType = FullType.unspecified}) {
-    final result = <Object>[
+    final result = <Object?>[
       'type',
       serializers.serialize(object.type, specifiedType: const FullType(String)),
       'message',
@@ -77,23 +77,23 @@ class _$ResourceErrorSerializer implements StructuredSerializer<ResourceError> {
 
   @override
   ResourceError deserialize(
-      Serializers serializers, Iterable<Object> serialized,
+      Serializers serializers, Iterable<Object?> serialized,
       {FullType specifiedType = FullType.unspecified}) {
     final result = new ResourceErrorBuilder();
 
     final iterator = serialized.iterator;
     while (iterator.moveNext()) {
-      final key = iterator.current as String;
+      final key = iterator.current! as String;
       iterator.moveNext();
-      final dynamic value = iterator.current;
+      final Object? value = iterator.current;
       switch (key) {
         case 'type':
           result.type = serializers.deserialize(value,
-              specifiedType: const FullType(String)) as String;
+              specifiedType: const FullType(String))! as String;
           break;
         case 'message':
           result.message = serializers.deserialize(value,
-              specifiedType: const FullType(String)) as String;
+              specifiedType: const FullType(String))! as String;
           break;
       }
     }
@@ -108,16 +108,12 @@ class _$Resource extends Resource {
   @override
   final String name;
 
-  factory _$Resource([void Function(ResourceBuilder) updates]) =>
-      (new ResourceBuilder()..update(updates)).build();
+  factory _$Resource([void Function(ResourceBuilder)? updates]) =>
+      (new ResourceBuilder()..update(updates))._build();
 
-  _$Resource._({this.id, this.name}) : super._() {
-    if (id == null) {
-      throw new BuiltValueNullFieldError('Resource', 'id');
-    }
-    if (name == null) {
-      throw new BuiltValueNullFieldError('Resource', 'name');
-    }
+  _$Resource._({required this.id, required this.name}) : super._() {
+    BuiltValueNullFieldError.checkNotNull(id, r'Resource', 'id');
+    BuiltValueNullFieldError.checkNotNull(name, r'Resource', 'name');
   }
 
   @override
@@ -135,12 +131,16 @@ class _$Resource extends Resource {
 
   @override
   int get hashCode {
-    return $jf($jc($jc(0, id.hashCode), name.hashCode));
+    var _$hash = 0;
+    _$hash = $jc(_$hash, id.hashCode);
+    _$hash = $jc(_$hash, name.hashCode);
+    _$hash = $jf(_$hash);
+    return _$hash;
   }
 
   @override
   String toString() {
-    return (newBuiltValueToStringHelper('Resource')
+    return (newBuiltValueToStringHelper(r'Resource')
           ..add('id', id)
           ..add('name', name))
         .toString();
@@ -148,22 +148,23 @@ class _$Resource extends Resource {
 }
 
 class ResourceBuilder implements Builder<Resource, ResourceBuilder> {
-  _$Resource _$v;
+  _$Resource? _$v;
 
-  String _id;
-  String get id => _$this._id;
-  set id(String id) => _$this._id = id;
+  String? _id;
+  String? get id => _$this._id;
+  set id(String? id) => _$this._id = id;
 
-  String _name;
-  String get name => _$this._name;
-  set name(String name) => _$this._name = name;
+  String? _name;
+  String? get name => _$this._name;
+  set name(String? name) => _$this._name = name;
 
   ResourceBuilder();
 
   ResourceBuilder get _$this {
-    if (_$v != null) {
-      _id = _$v.id;
-      _name = _$v.name;
+    final $v = _$v;
+    if ($v != null) {
+      _id = $v.id;
+      _name = $v.name;
       _$v = null;
     }
     return this;
@@ -171,20 +172,24 @@ class ResourceBuilder implements Builder<Resource, ResourceBuilder> {
 
   @override
   void replace(Resource other) {
-    if (other == null) {
-      throw new ArgumentError.notNull('other');
-    }
+    ArgumentError.checkNotNull(other, 'other');
     _$v = other as _$Resource;
   }
 
   @override
-  void update(void Function(ResourceBuilder) updates) {
+  void update(void Function(ResourceBuilder)? updates) {
     if (updates != null) updates(this);
   }
 
   @override
-  _$Resource build() {
-    final _$result = _$v ?? new _$Resource._(id: id, name: name);
+  Resource build() => _build();
+
+  _$Resource _build() {
+    final _$result = _$v ??
+        new _$Resource._(
+            id: BuiltValueNullFieldError.checkNotNull(id, r'Resource', 'id'),
+            name: BuiltValueNullFieldError.checkNotNull(
+                name, r'Resource', 'name'));
     replace(_$result);
     return _$result;
   }
@@ -196,16 +201,12 @@ class _$ResourceError extends ResourceError {
   @override
   final String message;
 
-  factory _$ResourceError([void Function(ResourceErrorBuilder) updates]) =>
-      (new ResourceErrorBuilder()..update(updates)).build();
+  factory _$ResourceError([void Function(ResourceErrorBuilder)? updates]) =>
+      (new ResourceErrorBuilder()..update(updates))._build();
 
-  _$ResourceError._({this.type, this.message}) : super._() {
-    if (type == null) {
-      throw new BuiltValueNullFieldError('ResourceError', 'type');
-    }
-    if (message == null) {
-      throw new BuiltValueNullFieldError('ResourceError', 'message');
-    }
+  _$ResourceError._({required this.type, required this.message}) : super._() {
+    BuiltValueNullFieldError.checkNotNull(type, r'ResourceError', 'type');
+    BuiltValueNullFieldError.checkNotNull(message, r'ResourceError', 'message');
   }
 
   @override
@@ -225,12 +226,16 @@ class _$ResourceError extends ResourceError {
 
   @override
   int get hashCode {
-    return $jf($jc($jc(0, type.hashCode), message.hashCode));
+    var _$hash = 0;
+    _$hash = $jc(_$hash, type.hashCode);
+    _$hash = $jc(_$hash, message.hashCode);
+    _$hash = $jf(_$hash);
+    return _$hash;
   }
 
   @override
   String toString() {
-    return (newBuiltValueToStringHelper('ResourceError')
+    return (newBuiltValueToStringHelper(r'ResourceError')
           ..add('type', type)
           ..add('message', message))
         .toString();
@@ -239,22 +244,23 @@ class _$ResourceError extends ResourceError {
 
 class ResourceErrorBuilder
     implements Builder<ResourceError, ResourceErrorBuilder> {
-  _$ResourceError _$v;
+  _$ResourceError? _$v;
 
-  String _type;
-  String get type => _$this._type;
-  set type(String type) => _$this._type = type;
+  String? _type;
+  String? get type => _$this._type;
+  set type(String? type) => _$this._type = type;
 
-  String _message;
-  String get message => _$this._message;
-  set message(String message) => _$this._message = message;
+  String? _message;
+  String? get message => _$this._message;
+  set message(String? message) => _$this._message = message;
 
   ResourceErrorBuilder();
 
   ResourceErrorBuilder get _$this {
-    if (_$v != null) {
-      _type = _$v.type;
-      _message = _$v.message;
+    final $v = _$v;
+    if ($v != null) {
+      _type = $v.type;
+      _message = $v.message;
       _$v = null;
     }
     return this;
@@ -262,23 +268,28 @@ class ResourceErrorBuilder
 
   @override
   void replace(ResourceError other) {
-    if (other == null) {
-      throw new ArgumentError.notNull('other');
-    }
+    ArgumentError.checkNotNull(other, 'other');
     _$v = other as _$ResourceError;
   }
 
   @override
-  void update(void Function(ResourceErrorBuilder) updates) {
+  void update(void Function(ResourceErrorBuilder)? updates) {
     if (updates != null) updates(this);
   }
 
   @override
-  _$ResourceError build() {
-    final _$result = _$v ?? new _$ResourceError._(type: type, message: message);
+  ResourceError build() => _build();
+
+  _$ResourceError _build() {
+    final _$result = _$v ??
+        new _$ResourceError._(
+            type: BuiltValueNullFieldError.checkNotNull(
+                type, r'ResourceError', 'type'),
+            message: BuiltValueNullFieldError.checkNotNull(
+                message, r'ResourceError', 'message'));
     replace(_$result);
     return _$result;
   }
 }
 
-// ignore_for_file: always_put_control_body_on_new_line,always_specify_types,annotate_overrides,avoid_annotating_with_dynamic,avoid_as,avoid_catches_without_on_clauses,avoid_returning_this,lines_longer_than_80_chars,omit_local_variable_types,prefer_expression_function_bodies,sort_constructors_first,test_types_in_equals,unnecessary_const,unnecessary_new
+// ignore_for_file: deprecated_member_use_from_same_package,type=lint

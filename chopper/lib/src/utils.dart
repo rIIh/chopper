@@ -1,5 +1,8 @@
-import 'package:chopper/chopper.dart';
+import 'dart:collection';
+
+import 'package:chopper/src/request.dart';
 import 'package:logging/logging.dart';
+import 'package:qs_dart/qs_dart.dart' show encode, EncodeOptions, ListFormat;
 
 /// Creates a new [Request] by copying [request] and adding a header with the
 /// provided key [name] and value [value] to the result.
@@ -30,8 +33,8 @@ Request applyHeader(
 ///
 /// ```dart
 /// final newRequest = applyHeaders(request, {
-/// 'Authorization': 'Bearer <token>',
-/// 'Content-Type': 'application/json',
+///   'Authorization': 'Bearer <token>',
+///   'Content-Type': 'application/json',
 /// });
 /// ```
 Request applyHeaders(
@@ -39,16 +42,18 @@ Request applyHeaders(
   Map<String, String> headers, {
   bool override = true,
 }) {
-  final h = Map<String, String>.from(request.headers);
+  final LinkedHashMap<String, String> headersCopy = LinkedHashMap(
+    equals: (a, b) => a.toLowerCase() == b.toLowerCase(),
+    hashCode: (e) => e.toLowerCase().hashCode,
+  );
+  headersCopy.addAll(request.headers);
 
-  for (var k in headers.keys) {
-    var val = headers[k];
-    if (val == null) continue;
-    if (!override && h.containsKey(k)) continue;
-    h[k] = val;
+  for (final entry in headers.entries) {
+    if (!override && headersCopy.containsKey(entry.key)) continue;
+    headersCopy[entry.key] = entry.value;
   }
 
-  return request.copyWith(headers: h);
+  return request.copyWith(headers: headersCopy);
 }
 
 final chopperLogger = Logger('Chopper');
@@ -56,55 +61,28 @@ final chopperLogger = Logger('Chopper');
 /// Creates a valid URI query string from [map].
 ///
 /// E.g., `{'foo': 'bar', 'ints': [ 1337, 42 ] }` will become 'foo=bar&ints=1337&ints=42'.
-String mapToQuery(Map<String, dynamic> map) => _mapToQuery(map).join('&');
-
-Iterable<_Pair<String, String>> _mapToQuery(
+String mapToQuery(
   Map<String, dynamic> map, {
-  String? prefix,
+  ListFormat? listFormat,
+  @Deprecated('Use listFormat instead') bool? useBrackets,
+  bool? includeNullQueryVars,
 }) {
-  /// ignore: prefer_collection_literals
-  final pairs = Set<_Pair<String, String>>();
+  listFormat ??= useBrackets == true ? ListFormat.brackets : ListFormat.repeat;
 
-  map.forEach((key, value) {
-    if (value != null) {
-      var name = Uri.encodeQueryComponent(key);
-
-      if (prefix != null) {
-        name = '$prefix.$name';
-      }
-
-      if (value is Iterable) {
-        pairs.addAll(_iterableToQuery(name, value));
-      } else if (value is Map<String, dynamic>) {
-        pairs.addAll(_mapToQuery(value, prefix: name));
-      } else if (value.toString().isNotEmpty == true) {
-        pairs.add(_Pair<String, String>(name, _normalizeValue(value)));
-      }
-    }
-  });
-  return pairs;
-}
-
-Iterable<_Pair<String, String>> _iterableToQuery(
-  String name,
-  Iterable values,
-) =>
-    values.map((v) => _Pair(name, _normalizeValue(v)));
-
-String _normalizeValue(value) => Uri.encodeQueryComponent(value.toString());
-
-class _Pair<A, B> {
-  final A first;
-  final B second;
-
-  _Pair(this.first, this.second);
-
-  @override
-  String toString() => '$first=$second';
+  return encode(
+    map,
+    EncodeOptions(
+      listFormat: listFormat,
+      allowDots: listFormat == ListFormat.repeat,
+      encodeDotInKeys: listFormat == ListFormat.repeat,
+      encodeValuesOnly: listFormat == ListFormat.repeat,
+      skipNulls: includeNullQueryVars != true,
+      strictNullHandling: false,
+      serializeDate: (DateTime date) => date.toUtc().toIso8601String(),
+    ),
+  );
 }
 
 bool isTypeOf<ThisType, OfType>() => _Instance<ThisType>() is _Instance<OfType>;
 
-class _Instance<T> {
-  //
-}
+final class _Instance<T> {}

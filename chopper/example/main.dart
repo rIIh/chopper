@@ -1,13 +1,13 @@
 import 'package:chopper/chopper.dart';
-import 'package:chopper/src/interceptor.dart';
+
 import 'definition.dart';
 
 Future<void> main() async {
   final chopper = ChopperClient(
-    baseUrl: 'http://localhost:8000',
+    baseUrl: Uri.parse('http://localhost:8000'),
     services: [
       // the generated service
-      MyService.create(ChopperClient())
+      MyService.create(ChopperClient()),
     ],
     converter: JsonConverter(),
   );
